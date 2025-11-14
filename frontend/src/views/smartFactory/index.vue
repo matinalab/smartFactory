@@ -1,0 +1,1389 @@
+<template>
+  <div class="smart-factory">
+    <div class="header">
+      <h1>智慧工厂监控中心</h1>
+      <div class="controls">
+        <button @click="refreshData" class="refresh-btn">刷新数据</button>
+        <button @click="toggleFullscreen" class="fullscreen-btn">
+          {{ isFullscreen ? '退出全屏' : '全屏显示' }}
+        </button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="left-panel">
+        <div class="stats-cards">
+          <div class="stat-card">
+            <h3>设备状态</h3>
+            <div class="stat-number">{{ stats.totalDevices }}</div>
+            <div class="stat-label">总设备数</div>
+          </div>
+          <div class="stat-card">
+            <h3>运行中</h3>
+            <div class="stat-number running">{{ stats.runningDevices }}</div>
+            <div class="stat-label">运行设备</div>
+          </div>
+          <div class="stat-card">
+            <h3>故障</h3>
+            <div class="stat-number error">{{ stats.errorDevices }}</div>
+            <div class="stat-label">故障设备</div>
+          </div>
+          <div class="stat-card">
+            <h3>效率</h3>
+            <div class="stat-number">{{ stats.efficiency }}%</div>
+            <div class="stat-label">整体效率</div>
+          </div>
+        </div>
+
+        <div class="realtime-panel">
+          <div class="realtime-header">
+            <h3>实时情况</h3>
+          </div>
+          <div class="realtime-metrics">
+            <div class="metric-item">
+              <span class="label">CPU 使用:</span>
+              <span class="value">{{ realtimeMetrics.cpuUsage }}%</span>
+            </div>
+            <div class="metric-item">
+              <span class="label">内存使用:</span>
+              <span class="value">{{ realtimeMetrics.memoryUsage }}%</span>
+            </div>
+            <div class="metric-item">
+              <span class="label">网络流入:</span>
+              <span class="value">{{ realtimeMetrics.networkTrafficIn }} Mbps</span>
+            </div>
+            <div class="metric-item">
+              <span class="label">网络流出:</span>
+              <span class="value">{{ realtimeMetrics.networkTrafficOut }} Mbps</span>
+            </div>
+            <div class="metric-item">
+              <span class="label">系统运行时间:</span>
+              <span class="value">{{ realtimeMetrics.uptime }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="alerts-panel">
+          <div class="alerts-header">
+            <h3>实时告警</h3>
+            <div class="ws-status" :class="{ connected: wsConnected }">
+              <span class="status-dot"></span>
+              <span class="status-text">{{ wsConnected ? 'WebSocket 已连接' : 'WebSocket 未连接' }}</span>
+            </div>
+          </div>
+          <div class="alert-list">
+            <div 
+              v-for="alert in alerts" 
+              :key="alert.id" 
+              class="alert-item"
+              :class="alert.level"
+            >
+              <span class="alert-time">{{ alert.time }}</span>
+              <span class="alert-message">{{ alert.message }}</span>
+              <span class="alert-level">{{ alert.level }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="main-panel">
+        <FactoryFloorPlan 
+          ref="floorPlanRef"
+          :factoryData="factoryData"
+          @area-click="handleAreaClick"
+          @device-click="handleDeviceClick"
+        />
+      </div>
+
+      <div class="right-panel">
+        <div class="device-details" v-if="selectedDevice">
+          <h3>设备详情</h3>
+          <div class="device-info">
+            <div class="info-item">
+              <span class="label">设备名称:</span>
+              <span class="value">{{ selectedDevice.name }}</span>
+            </div>
+            <div class="info-item">
+              <span class="label">设备类型:</span>
+              <span class="value">{{ selectedDevice.type }}</span>
+            </div>
+            <div class="info-item">
+              <span class="label">运行状态:</span>
+              <span class="value" :class="selectedDevice.status">{{ selectedDevice.status }}</span>
+            </div>
+            <div class="info-item">
+              <span class="label">效率:</span>
+              <span class="value">{{ selectedDevice.efficiency }}%</span>
+            </div>
+            <div class="info-item">
+              <span class="label">温度:</span>
+              <span class="value">{{ selectedDevice.temperature }}°C</span>
+            </div>
+          </div>
+          <div class="device-controls">
+            <button @click="controlDevice('start')" class="control-btn start">启动</button>
+            <button @click="controlDevice('stop')" class="control-btn stop">停止</button>
+            <button @click="controlDevice('restart')" class="control-btn restart">重启</button>
+            <button 
+              v-if="selectedDevice?.type === 'forklift'" 
+              @click="moveForklift" 
+              :disabled="forkliftMoving"
+              class="control-btn transport"
+            >
+              {{ forkliftMoving ? '运输中...' : '运输物料' }}
+            </button>
+            <button @click="show3DModel" class="control-btn model-3d">
+              查看3D模型
+            </button>
+          </div>
+        </div>
+
+        <div class="area-details" v-if="selectedArea">
+          <h3>区域详情</h3>
+          <div class="area-info">
+            <div class="info-item">
+              <span class="label">区域名称:</span>
+              <span class="value">{{ selectedArea.name }}</span>
+            </div>
+            <div class="info-item">
+              <span class="label">设备数量:</span>
+              <span class="value">{{ selectedArea.deviceCount }}</span>
+            </div>
+            <div class="info-item">
+              <span class="label">运行状态:</span>
+              <span class="value" :class="selectedArea.status">{{ selectedArea.status }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- 添加3D模型弹窗组件 -->
+    <Device3DModal 
+      :visible="show3DModalVisible"
+      :device-data="selectedDevice"
+      :device-name="selectedDevice?.name"
+      @close="close3DModal"
+    />
+  </div>
+</template>
+
+<script setup>
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import FactoryFloorPlan from './components/factoryFloorPlan.vue'
+import Device3DModal from './components/Device3DModal.vue'
+import { factoryApi, statsApi, devicesApi, alertsApi } from '@/api'
+import { useWebSocket } from '@/composables/useWebSocket'
+
+// 响应式数据
+const floorPlanRef = ref(null)
+const isFullscreen = ref(false)
+const selectedDevice = ref(null)
+const selectedArea = ref(null)
+const forkliftMoving = ref(false)
+const show3DModalVisible = ref(false)
+const realtimeMetrics = reactive({
+  cpuUsage: 0,
+  memoryUsage: 0,
+  networkTrafficIn: 0,
+  networkTrafficOut: 0,
+  uptime: ''
+})
+
+// WebSocket 连接
+const { connect: connectWebSocket, on: onWebSocket, disconnect: disconnectWebSocket, isConnected: wsConnected } = useWebSocket()
+
+// 坐标转换函数
+const GRID_SIZE = 20
+
+// 网格坐标转像素坐标
+const gridToPixel = (gridX, gridY) => {
+  // 获取子组件的实际SVG高度
+  const actualHeight = floorPlanRef.value?.svgSize?.height || 600
+  return {
+    x: gridX * GRID_SIZE,
+    y: actualHeight - (gridY * GRID_SIZE)
+  }
+}
+
+// 像素坐标转网格坐标  
+const pixelToGrid = (pixelX, pixelY) => {
+  const actualHeight = floorPlanRef.value?.svgSize?.height || 600
+  return {
+    gridX: Math.round(pixelX / GRID_SIZE),
+    gridY: Math.round((actualHeight - pixelY) / GRID_SIZE)
+  }
+}
+
+// 获取智能连接路径
+const getConnectionCurvePath = (fromAreaId, toAreaId) => {
+  // 直接使用子组件的智能连接系统
+  const connection = { from: fromAreaId, to: toAreaId }
+  return floorPlanRef.value?.getConnectionCurvePoints(connection) || []
+}
+
+const stats = reactive({
+  totalDevices: 0,
+  runningDevices: 0,
+  errorDevices: 0,
+  efficiency: 0
+})
+
+const alerts = ref([
+  // { id: 1, time: '14:30:25', message: 'CNC机床温度异常', level: 'warning' },
+  // { id: 2, time: '14:28:10', message: '流水线B停机告警', level: 'error' },
+  // { id: 3, time: '14:25:45', message: '原料仓库存不足', level: 'info' }
+])
+
+// 新布局配置: 料库 -> 投料 -> 生产 + 清洗 -> 灌装 -> 成品库
+const COLS = 5
+const ROWS = 2
+const ROOM_CONFIGS = [
+  // 主流程（第0行）
+  { id: 'warehouse', row: 0, col: 0.5, width: 8, height: 6 },        // 料库
+  { id: 'feeding', row: 0, col: 2, width: 10, height: 6 },          // 投料区
+  { id: 'production', row: 0, col: 3.5, width: 10, height: 6 },      // 生产车间
+  
+  // （第1行）
+  { id: 'cleaning', row: 1, col: 3.5, width: 10, height: 6 },          // 清洗区
+  { id: 'filling', row: 1, col: 2, width: 9, height: 8 },          // 灌装区
+  { id: 'finished_goods', row: 1, col: 0.5, width: 8, height: 8 },   // 成品库
+
+]
+
+// 计算房间在指定行列中的居中位置
+const calculateRoomPosition = (row, col, roomWidth, roomHeight) => {
+  // 获取SVG实际宽度和高度
+  const svgElement = document.querySelector('.factory-svg')
+  const svgWidth = svgElement ? svgElement.getBoundingClientRect().width : 800
+  const svgHeight = svgElement ? svgElement.getBoundingClientRect().height : 600
+  
+  // 计算每列的宽度和每行的高度
+  const colWidth = svgWidth / COLS
+  const rowHeight = svgHeight / ROWS
+  
+  // 计算该列的起始X坐标（像素）
+  const colStartX = col * colWidth
+  
+  // 计算该行的起始Y坐标（像素，从上往下）
+  const rowStartY = row * rowHeight
+  
+  // 房间在该列中水平居中
+  const roomPixelWidth = roomWidth * GRID_SIZE
+  const roomStartX = colStartX + (colWidth - roomPixelWidth) / 2
+  
+  // 房间在该行中垂直居中
+  const roomPixelHeight = roomHeight * GRID_SIZE
+  const roomStartY = rowStartY + (rowHeight - roomPixelHeight) / 2
+  
+  // 转换为网格坐标（注意Y轴需要反转，因为起点在左下角）
+  const gridX = Math.round(roomStartX / GRID_SIZE)
+  const gridY = Math.round((svgHeight - roomStartY - roomPixelHeight) / GRID_SIZE)
+  
+  return { gridX, gridY }
+}
+
+// 更新所有房间位置
+const updateRoomPositions = () => {
+  ROOM_CONFIGS.forEach(config => {
+    const area = factoryData.value.areas.find(a => a.id === config.id)
+    if (area) {
+      const oldPosition = { gridX: area.gridX, gridY: area.gridY }
+      const newPosition = calculateRoomPosition(config.row, config.col, config.width, config.height)
+      const deltaX = newPosition.gridX - oldPosition.gridX
+      const deltaY = newPosition.gridY - oldPosition.gridY
+      
+      // 更新房间位置
+      area.gridX = newPosition.gridX
+      area.gridY = newPosition.gridY
+      
+      // 同步移动房间内的设备
+      area.devices.forEach(device => {
+        device.gridX += deltaX
+        device.gridY += deltaY
+      })
+    }
+  })
+}
+
+const factoryData = ref({
+  areas: [],
+  connections: []
+})
+
+// 加载工厂数据
+const loadFactoryData = async () => {
+  try {
+    const res = await factoryApi.getFactoryData()
+    console.log('res', res);
+    factoryData.value = res.data
+  } catch (err) {
+    console.error('加载失败:', err)
+  }
+}
+
+// 加载统计数据
+const loadStats = async () => {
+  try {
+    const response = await statsApi.getStats()
+    const data = response.data || {}
+    Object.assign(stats, data) // 更新reactive的stats
+  } catch (err) {
+    console.error('加载统计数据失败:', err)
+  }
+}
+
+// 加载告警数据
+const loadAlerts = async () => {
+  try {
+    const response = await alertsApi.getAll()
+    
+    const data = response.data || []
+    alerts.value = data.map(alert => ({
+      id: alert.id,
+      time: new Date(alert.time).toLocaleTimeString('zh-CN', { hour12: false }),
+      message: alert.message,
+      level: alert.level
+    }))
+  } catch (err) {
+    console.error('加载告警数据失败:', err)
+  }
+}
+
+// 启动告警生成器
+const startAlertGenerator = async () => {
+  try {
+    const response = await alertsApi.startGenerator()
+    console.log('告警生成器启动成功:', response)
+  } catch (err) {
+    console.error('启动告警生成器失败:', err)
+  }
+}
+
+// 初始化 WebSocket 连接
+const initWebSocket = () => {
+  // 连接到告警 WebSocket 服务
+  const wsUrl = import.meta.env.VITE_WS_URL || 'http://localhost:3000'
+  connectWebSocket(wsUrl, '/alerts')
+  
+  // 监听新告警推送
+  onWebSocket('new-alert', (alert) => {
+    console.log('📢 收到新告警推送:', alert)
+    
+    // 格式化时间并添加到告警列表顶部
+    const formattedAlert = {
+      id: alert.id,
+      time: new Date(alert.time).toLocaleTimeString('zh-CN', { hour12: false }),
+      message: alert.message,
+      level: alert.level
+    }
+    
+    // 添加到列表顶部
+    alerts.value.unshift(formattedAlert)
+    
+    // 限制显示数量（可选）
+    if (alerts.value.length > 10) {
+      alerts.value = alerts.value.slice(0, 10)
+    }
+    
+    // 刷新统计数据
+    loadStats()
+  })
+  
+  // 监听告警删除通知
+  onWebSocket('alert-deleted', (alertId) => {
+    console.log('🗑️ 告警已删除:', alertId)
+    const index = alerts.value.findIndex(a => a.id === alertId)
+    if (index !== -1) {
+      alerts.value.splice(index, 1)
+    }
+  })
+  
+  // 监听告警清空通知
+  onWebSocket('alerts-cleared', () => {
+    console.log('🧹 告警已清空')
+    alerts.value = []
+  })
+}
+
+// 实时情况数据
+const loadRealtimeMetrics = () => {
+  realtimeMetrics.cpuUsage = (Math.random() * 10 + 20).toFixed(1) // 20.0% - 30.0%
+  realtimeMetrics.memoryUsage = (Math.random() * 15 + 40).toFixed(1) // 40.0% - 55.0%
+  realtimeMetrics.networkTrafficIn = (Math.random() * 5 + 10).toFixed(1) // 10.0 Mbps - 15.0 Mbps
+  realtimeMetrics.networkTrafficOut = (Math.random() * 3 + 5).toFixed(1) // 5.0 Mbps - 8.0 Mbps
+
+  // 模拟运行时间
+  const days = Math.floor(Math.random() * 30)
+  const hours = Math.floor(Math.random() * 24)
+  const minutes = Math.floor(Math.random() * 60)
+  realtimeMetrics.uptime = `${days} 天 ${hours} 小时 ${minutes} 分钟`
+  console.log('实时情况数据已更新:', realtimeMetrics)
+}
+
+// 全局刷新函数
+const refreshData = async () => {
+  await Promise.all([
+    loadFactoryData(),
+    loadStats(),
+    loadAlerts(),
+    loadRealtimeMetrics()
+  ])
+  updateStats()
+}
+
+// const factoryData = reactive({
+//   areas: [
+//     {
+//       id: 'warehouse',
+//       name: '原料仓库',
+//       type: 'storage',
+//       gridX: 3,
+//       gridY: 15,
+//       gridWidth: 8,
+//       gridHeight: 5,
+//       devices: [
+//         { id: 'forklift1', name: '叉车1', type: 'forklift', status: 'idle', gridX: 4, gridY: 17, efficiency: 75, temperature: 28 },
+//         { id: 'shelf1', name: '货架A区', type: 'shelf', status: 'normal', gridX: 7, gridY: 18, efficiency: 100, temperature: 22 }
+//       ]
+//     },
+//     {
+//       id: 'production2',
+//       name: '生产线B',
+//       type: 'production',
+//       gridX: 15,
+//       gridY: 15,
+//       gridWidth: 9,
+//       gridHeight: 7,
+//       devices: [
+//         { id: 'robot2', name: '机械臂B1', type: 'robot', status: 'running', gridX: 20, gridY: 19.5, efficiency: 92, temperature: 41 },
+//         { id: 'cnc2', name: 'CNC机床2', type: 'cnc', status: 'error', gridX: 20, gridY: 17, efficiency: 0, temperature: 78 }
+//       ]
+//     },
+//     {
+//       id: 'assembly',
+//       name: '组装车间', 
+//       type: 'production',
+//       gridX: 27,
+//       gridY: 15,
+//       gridWidth: 10,
+//       gridHeight: 7,
+//       devices: [
+//         { id: 'robot1', name: '机械臂A1', type: 'robot', status: 'running', gridX: 29, gridY: 19.5, efficiency: 95, temperature: 42 },
+//         { id: 'cnc1', name: 'CNC机床1', type: 'cnc', status: 'warning', gridX: 29, gridY: 17, efficiency: 88, temperature: 58 },
+//         { id: 'conveyor1', name: '传输带1', type: 'conveyor', status: 'running', gridX: 32, gridY: 17, efficiency: 92, temperature: 35 }
+//       ]
+//     },
+//     {
+//       id: 'testing',
+//       name: '质量检测区',
+//       type: 'quality',
+//       gridX: 40,
+//       gridY: 15,
+//       gridWidth: 9,
+//       gridHeight: 6,
+//       devices: [
+//         { id: 'tester1', name: '质量检测仪1', type: 'tester', status: 'running', gridX: 42, gridY: 17.5, efficiency: 90, temperature: 45 },
+//         { id: 'camera1', name: '视觉检测相机', type: 'camera', status: 'running', gridX: 45, gridY: 18.5, efficiency: 96, temperature: 38 }
+//       ]
+//     },
+//   ],
+//   connections: [
+//     {
+//       from: 'warehouse',
+//       to: 'production2',
+//       type: 'material',
+//       component: {          
+//         type: 'valve',      
+//         status: 'running', 
+//         name: '控制阀门V001',
+//         id: 'comp1'
+//       }
+//     },
+//     {
+//       from: 'production2',
+//       to: 'assembly',
+//       type: 'product',
+//       component: {
+//         type: 'sensor',
+//         status: 'normal', 
+//         name: '温度传感器T002',
+//         id: 'comp2'
+//       }
+//     },
+//     {
+//       from: 'assembly',
+//       to: 'testing',
+//       type: 'product',
+//       component: {
+//         type: 'pump',
+//         status: 'error', 
+//         name: '压力泵F003',
+//         id: 'comp3'
+//       }
+//     },
+//   ]
+// })
+
+const toggleFullscreen = () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen()
+    isFullscreen.value = true
+  } else {
+    document.exitFullscreen()
+    isFullscreen.value = false
+  }
+}
+
+const handleAreaClick = (area) => {
+  selectedDevice.value = null
+  selectedArea.value = area
+  console.log('点击区域:', area)
+}
+
+const handleDeviceClick = (device) => {
+  selectedArea.value = null
+  selectedDevice.value = device
+  console.log('点击设备:', device)
+}
+
+const controlDevice = async (action) => {
+  if (selectedDevice.value) {
+    // 找到设备在原始数据中的位置
+    const targetArea = factoryData.value.areas.find(area => 
+      area.devices.some(device => device.id === selectedDevice.value.id)
+    )
+    const targetDevice = targetArea?.devices.find(device => 
+      device.id === selectedDevice.value.id
+    )
+    
+    if (targetDevice) {
+      // 根据操作更新状态
+      switch(action) {
+        case 'start':
+          targetDevice.status = 'running'
+          selectedDevice.value.status = 'running'
+          console.log(`启动设备: ${selectedDevice.value.name}`)
+          break
+        case 'stop':
+          targetDevice.status = 'idle'
+          selectedDevice.value.status = 'idle'
+          console.log(`停止设备: ${selectedDevice.value.name}`)
+          break
+        case 'restart':
+          targetDevice.status = 'idle'
+          selectedDevice.value.status = 'idle'
+          console.log(`重启设备: ${selectedDevice.value.name}`)
+          setTimeout(() => {
+            if (targetDevice && selectedDevice.value?.id === targetDevice.id) {
+              targetDevice.status = 'running'
+              selectedDevice.value.status = 'running'
+            }
+          }, 1000)
+          break
+      }
+      
+      // 刷新统计数据
+      await loadStats()
+    }
+  }
+}
+
+// 更新统计数据的方法
+const updateStats = () => {
+  const devices = factoryData.value.areas.flatMap(area => area.devices)
+  stats.totalDevices = devices.length
+  stats.runningDevices = devices.filter(d => d.status === 'running').length
+  stats.errorDevices = devices.filter(d => d.status === 'error').length
+  stats.efficiency = Math.round((stats.runningDevices / stats.totalDevices) * 100)
+}
+
+// 叉车移动动画函数
+const moveForklift = async () => {
+  if (forkliftMoving.value) return
+  
+  // 找到叉车设备
+  const warehouseArea = factoryData.value.areas.find(area => area.id === 'warehouse')
+  const forklift = warehouseArea?.devices.find(device => device.id === 'forklift1')
+  
+  if (!forklift) return
+  
+  // 清理可能的残留动画坐标
+  delete forklift._animationX
+  delete forklift._animationY
+  
+  // 保存原始位置
+  forkliftMoving.value = true
+  forklift.status = 'running'
+  updateStats()
+  
+  // 获取实际的连接线路径
+  const curvePoints = getConnectionCurvePath('warehouse', 'feeding')
+  if (!curvePoints.length) {
+    forkliftMoving.value = false
+    return
+  }
+  
+  // 设置移动路径(简化版，跟返回路径保持一致)
+  const forkliftCurrentPos = gridToPixel(forklift.gridX, forklift.gridY)
+  const path = [
+    forkliftCurrentPos, // 叉车当前位置
+    curvePoints[0], // warehouse连接线起点
+    curvePoints[curvePoints.length - 1], // feeding连接线终点
+    { // 目标区域内部位置
+      x: curvePoints[curvePoints.length - 1].x + 20, 
+      y: curvePoints[curvePoints.length - 1].y
+    }
+  ]
+  
+  // 简化时间配置
+  const segmentDurations = [
+    800,  // 到连接起点
+    2000, // 沿连接线移动
+    800   // 进入目标区域
+  ]
+  
+  // 执行移动动画
+  for (let i = 0; i < path.length - 1; i++) {
+    await animateMovement(forklift, path[i], path[i + 1], segmentDurations[i] || 1500)
+  }
+  
+  // 在目标位置停留 - 触发旋转动画
+  floorPlanRef.value?.setWorkingAnimation(forklift)
+  await new Promise(resolve => setTimeout(resolve, 2000))
+  floorPlanRef.value?.clearWorkingAnimation()
+  
+  // 返回路径 - 直接将去程路径反转
+  const returnPath = [...path].reverse()
+  
+  // 返回路径时间配置 - 将去程时间配置反转
+  const returnDurations = [...segmentDurations].reverse()
+  
+  for (let i = 0; i < returnPath.length - 1; i++) {
+    await animateMovement(forklift, returnPath[i], returnPath[i + 1], returnDurations[i] || 1000)
+  }
+  
+  // 恢复状态
+  forklift.status = 'idle'
+  forkliftMoving.value = false
+  // 确保清理所有动画坐标
+  delete forklift._animationX
+  delete forklift._animationY
+  updateStats()
+}
+
+// 平滑移动动画
+const animateMovement = (device, startPos, endPos, duration) => {
+  return new Promise(resolve => {
+    const startTime = Date.now()
+    
+    const animate = () => {
+      const elapsed = Date.now() - startTime
+      const progress = Math.min(elapsed / duration, 1)
+      
+      // 使用缓动函数
+      const easeProgress = 1 - Math.pow(1 - progress, 3)
+      
+      // 计算当前像素位置
+      const currentX = startPos.x + (endPos.x - startPos.x) * easeProgress
+      const currentY = startPos.y + (endPos.y - startPos.y) * easeProgress
+      
+      // 动画过程中使用精确的像素坐标
+      // 为动画添加临时的精确坐标属性
+      device._animationX = currentX
+      device._animationY = currentY
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate)
+      } else {
+        // 动画结束，更新最终网格坐标并清理临时坐标
+        const endGridCoords = pixelToGrid(endPos.x, endPos.y)
+        device.gridX = endGridCoords.gridX
+        device.gridY = endGridCoords.gridY
+        // 清理临时动画坐标
+        delete device._animationX
+        delete device._animationY
+        resolve()
+      }
+    }
+    
+    animate()
+  })
+}
+
+// 显示3D模型
+const show3DModel = () => {
+  if (selectedDevice.value) {
+    // 保存当前视图状态
+    floorPlanRef.value?.saveCurrentView()
+    
+    // 以选中的设备为中心进行缩放
+    floorPlanRef.value?.zoomToDevice(selectedDevice.value, 2.5)
+    
+    // 显示3D模型弹窗
+    show3DModalVisible.value = true
+  }
+}
+
+// 关闭3D模型弹窗
+const close3DModal = () => {
+  show3DModalVisible.value = false
+  
+  // 重置视图，让弹窗关闭动画完成
+  setTimeout(() => {
+    floorPlanRef.value?.restoreView()
+  }, 100)
+}
+
+// 生命周期
+onMounted(async () => {
+  // 加载数据
+  await refreshData()
+
+  // 初始化 WebSocket 连接（优先建立连接）
+  initWebSocket()
+
+  // 启动告警生成器（延迟2秒启动）
+  setTimeout(() => {
+    startAlertGenerator()
+  }, 2000)
+
+  // 监听全屏状态变化
+  document.addEventListener('fullscreenchange', () => {
+    isFullscreen.value = !!document.fullscreenElement
+  })
+  
+  // 初始化布局
+  setTimeout(() => {
+    updateRoomPositions()
+  }, 0)
+  
+  // 监听窗口大小变化
+  let parentResizeTimeout = null
+  window.addEventListener('resize', () => {
+    clearTimeout(parentResizeTimeout)
+    parentResizeTimeout = setTimeout(() => {
+      updateRoomPositions()
+    }, 150)
+  })
+})
+
+onUnmounted(() => {
+  // 断开 WebSocket 连接
+  disconnectWebSocket()
+  
+  // 清理其他监听器
+  document.removeEventListener('fullscreenchange', () => {})
+  window.removeEventListener('resize', updateRoomPositions)
+})
+</script>
+
+<style scoped>
+.smart-factory {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0f1419 100%);
+  position: relative;
+}
+
+/* 扫描线效果 */
+.smart-factory::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 255, 255, 0.03) 0px,
+    transparent 1px,
+    transparent 2px,
+    rgba(0, 255, 255, 0.03) 3px
+  );
+  pointer-events: none;
+  z-index: 1;
+  animation: scanline 8s linear infinite;
+}
+
+@keyframes scanline {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(100vh); }
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  background: linear-gradient(180deg, rgba(10, 14, 39, 0.95) 0%, rgba(26, 31, 58, 0.9) 100%);
+  box-shadow: 0 4px 20px rgba(0, 255, 255, 0.1), 
+              0 0 40px rgba(139, 92, 246, 0.05);
+  border-bottom: 2px solid rgba(0, 255, 255, 0.3);
+  position: relative;
+  z-index: 2;
+}
+
+.header h1 {
+  margin: 0;
+  color: #00ffff;
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+  letter-spacing: 2px;
+  animation: glitch 3s infinite;
+}
+
+@keyframes glitch {
+  0%, 90%, 100% { transform: translate(0); }
+  92% { transform: translate(-2px, 1px); text-shadow: 0 0 10px #ff006e; }
+  96% { transform: translate(-1px, 2px); text-shadow: 0 0 10px #8b5cf6; }
+}
+
+.controls {
+  display: flex;
+  gap: 10px;
+  position: relative;
+  z-index: 2;
+}
+
+.refresh-btn, .fullscreen-btn {
+  padding: 10px 20px;
+  border: 2px solid;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  background: rgba(0, 255, 255, 0.1);
+  color: #00ffff;
+  border-color: #00ffff;
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.3),
+              inset 0 0 10px rgba(0, 255, 255, 0.1);
+  outline: none; /* 移除默认outline */
+}
+
+.refresh-btn:hover, .fullscreen-btn:hover {
+  background: rgba(0, 255, 255, 0.2);
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.6),
+              inset 0 0 15px rgba(0, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+/* 点击和焦点状态保持青色边框 */
+.refresh-btn:focus, .fullscreen-btn:focus,
+.refresh-btn:active, .fullscreen-btn:active {
+  outline: none;
+  border-color: #00ffff;
+  background: rgba(0, 255, 255, 0.2);
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.6),
+              inset 0 0 15px rgba(0, 255, 255, 0.2);
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  padding: 20px;
+  gap: 20px;
+  position: relative;
+  z-index: 2;
+}
+
+.left-panel, .right-panel {
+  width: 330px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 0 10px;
+  gap: 20px;
+}
+
+/* 自定义滚动条 */
+.left-panel::-webkit-scrollbar,
+.right-panel::-webkit-scrollbar {
+  width: 5px;
+}
+
+.left-panel::-webkit-scrollbar-track,
+.right-panel::-webkit-scrollbar-track {
+  background: rgba(0, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.left-panel::-webkit-scrollbar-thumb,
+.right-panel::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 255, 0.3);
+  border-radius: 4px;
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+}
+
+.main-panel {
+  flex: 1;
+}
+
+.stats-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(26, 31, 58, 0.8) 0%, rgba(10, 14, 39, 0.9) 100%);
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 255, 255, 0.3);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5),
+              0 0 20px rgba(0, 255, 255, 0.1),
+              inset 0 0 20px rgba(0, 255, 255, 0.05);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 30%,
+    rgba(0, 255, 255, 0.1) 50%,
+    transparent 70%
+  );
+  animation: shine 3s infinite;
+}
+
+@keyframes shine {
+  0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+  100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+}
+
+.stat-card h3 {
+  color: #00ffff;
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.stat-number {
+  font-size: 32px;
+  font-weight: bold;
+  margin: 10px 0;
+  color: #00ffff;
+  text-shadow: 0 0 15px rgba(0, 255, 255, 0.8),
+               0 0 30px rgba(0, 255, 255, 0.4);
+  animation: numberPulse 2s ease-in-out infinite;
+}
+
+@keyframes numberPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+.stat-number.running {
+  color: #00ff88;
+  text-shadow: 0 0 15px rgba(0, 255, 136, 0.8),
+               0 0 30px rgba(0, 255, 136, 0.4);
+}
+
+.stat-number.error {
+  color: #ff006e;
+  text-shadow: 0 0 15px rgba(255, 0, 110, 0.8),
+               0 0 30px rgba(255, 0, 110, 0.4);
+}
+
+.stat-label {
+  color: rgba(0, 255, 255, 0.7);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.alerts-panel {
+  min-height: 280px;
+  background: linear-gradient(135deg, rgba(26, 31, 58, 0.8) 0%, rgba(10, 14, 39, 0.9) 100%);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 0, 110, 0.3);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5),
+              0 0 20px rgba(255, 0, 110, 0.1);
+  overflow: hidden;
+}
+
+.alerts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  background: linear-gradient(90deg, rgba(255, 0, 110, 0.2) 0%, transparent 100%);
+  border-bottom: 1px solid rgba(255, 0, 110, 0.3);
+}
+
+.alerts-panel h3 {
+  margin: 0;
+  color: #ff006e;
+  text-shadow: 0 0 10px rgba(255, 0, 110, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 14px;
+}
+
+/* WebSocket 状态指示器 */
+.ws-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #666;
+  box-shadow: 0 0 8px rgba(102, 102, 102, 0.6);
+  animation: pulse-disconnected 2s ease-in-out infinite;
+}
+
+.ws-status.connected .status-dot {
+  background: #00ff88;
+  box-shadow: 0 0 12px rgba(0, 255, 136, 0.8);
+  animation: pulse-connected 2s ease-in-out infinite;
+}
+
+.ws-status.connected .status-text {
+  color: #00ff88;
+}
+
+@keyframes pulse-connected {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes pulse-disconnected {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.alert-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.alert-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.alert-list::-webkit-scrollbar-track {
+  background: rgba(255, 0, 110, 0.05);
+}
+
+.alert-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 0, 110, 0.3);
+  border-radius: 3px;
+}
+
+.alert-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(255, 0, 110, 0.1);
+  font-size: 12px;
+  transition: all 0.3s ease;
+}
+
+.alert-item:hover {
+  background: rgba(255, 0, 110, 0.05);
+}
+
+.alert-item.error {
+  background: rgba(255, 0, 110, 0.1);
+  border-left: 3px solid #ff006e;
+  box-shadow: inset 0 0 20px rgba(255, 0, 110, 0.1);
+}
+
+.alert-item.warning {
+  background: rgba(250, 173, 20, 0.1);
+  border-left: 3px solid #faad14;
+  box-shadow: inset 0 0 20px rgba(250, 173, 20, 0.1);
+}
+
+.alert-item.info {
+  background: rgba(0, 255, 136, 0.1);
+  border-left: 3px solid #00ff88;
+  box-shadow: inset 0 0 20px rgba(0, 255, 136, 0.1);
+}
+
+.alert-time {
+  width: 80px;
+  color: rgba(0, 255, 255, 0.6);
+  font-size: 11px;
+}
+
+.alert-message {
+  flex: 1;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.alert-level {
+  width: 60px;
+  text-align: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.realtime-panel {
+  min-height: 220px;
+  background: linear-gradient(135deg, rgba(26, 31, 58, 0.8) 0%, rgba(10, 14, 39, 0.9) 100%);
+  border-radius: 8px;
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5),
+              0 0 20px rgba(0, 255, 136, 0.1);
+}
+
+.realtime-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  background: linear-gradient(90deg, rgba(0, 255, 136, 0.2) 0%, transparent 100%);
+  border-bottom: 1px solid rgba(0, 255, 136, 0.3);
+}
+
+.realtime-header h3 {
+  margin: 0;
+  color: #90ee90;
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 14px;
+}
+
+.realtime-metrics {
+  display: flex;
+  flex-direction: column;
+  padding: 15px 20px;
+  gap: 10px;
+}
+
+.metric-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.metric-item .label {
+  color: rgba(144, 238, 144, 0.7);
+  text-transform: uppercase;
+}
+
+.metric-item .value {
+  font-weight: 600;
+  color: #00ff88;
+  text-shadow: 0 0 8px rgba(0, 255, 136, 0.6);
+}
+
+.device-details, .area-details {
+  background: linear-gradient(135deg, rgba(26, 31, 58, 0.8) 0%, rgba(10, 14, 39, 0.9) 100%);
+  border-radius: 8px;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5),
+              0 0 20px rgba(139, 92, 246, 0.1);
+  padding: 20px;
+  position: relative;
+}
+
+.device-details::before,
+.area-details::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #8b5cf6, transparent);
+  animation: borderGlow 2s linear infinite;
+}
+
+@keyframes borderGlow {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
+.device-details h3, .area-details h3 {
+  margin-top: 0;
+  color: #8b5cf6;
+  text-shadow: 0 0 10px rgba(139, 92, 246, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 14px;
+}
+
+.info-item {
+  display: flex;
+  margin-bottom: 12px;
+}
+
+.info-item .label {
+  width: 100px;
+  color: rgba(0, 255, 255, 0.7);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.info-item .value {
+  flex: 1;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.value.running, .value.normal {
+  color: #00ff88;
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.6);
+}
+
+.value.error, .value.idle {
+  color: #ff006e;
+  text-shadow: 0 0 10px rgba(255, 0, 110, 0.6);
+}
+
+.device-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.control-btn {
+  flex: none;
+  padding: 8px 16px;
+  border: 2px solid;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.control-btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transform: translate(-50%, -50%);
+  transition: width 0.4s, height 0.4s;
+}
+
+.control-btn:hover::before {
+  width: 200%;
+  height: 200%;
+}
+
+.control-btn.start {
+  background: rgba(0, 255, 136, 0.1);
+  color: #00ff88;
+  border-color: #00ff88;
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+}
+
+.control-btn.start:hover {
+  background: rgba(0, 255, 136, 0.2);
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.6);
+  transform: translateY(-2px);
+}
+
+.control-btn.stop {
+  background: rgba(255, 0, 110, 0.1);
+  color: #ff006e;
+  border-color: #ff006e;
+  box-shadow: 0 0 10px rgba(255, 0, 110, 0.3);
+}
+
+.control-btn.stop:hover {
+  background: rgba(255, 0, 110, 0.2);
+  box-shadow: 0 0 20px rgba(255, 0, 110, 0.6);
+  transform: translateY(-2px);
+}
+
+.control-btn.restart {
+  background: rgba(0, 255, 255, 0.1);
+  color: #00ffff;
+  border-color: #00ffff;
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+}
+
+.control-btn.restart:hover {
+  background: rgba(0, 255, 255, 0.2);
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.6);
+  transform: translateY(-2px);
+}
+
+.control-btn.transport {
+  background: rgba(250, 140, 22, 0.1);
+  color: #fa8c16;
+  border-color: #fa8c16;
+  box-shadow: 0 0 10px rgba(250, 140, 22, 0.3);
+}
+
+.control-btn.transport:hover {
+  background: rgba(250, 140, 22, 0.2);
+  box-shadow: 0 0 20px rgba(250, 140, 22, 0.6);
+  transform: translateY(-2px);
+}
+
+.control-btn.model-3d {
+  background: rgba(139, 92, 246, 0.1);
+  color: #8b5cf6;
+  border-color: #8b5cf6;
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.3);
+}
+
+.control-btn.model-3d:hover {
+  background: rgba(139, 92, 246, 0.2);
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.6);
+  transform: translateY(-2px);
+}
+
+.control-btn:disabled {
+  background: rgba(100, 100, 100, 0.1);
+  color: #666;
+  border-color: #666;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+</style>
