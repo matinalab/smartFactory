@@ -99,6 +99,7 @@ export async function seedFactoryData(dataSource: DataSource) {
     // 投料区设备
     { id: 'feeder1', areaId: 'feeding', name: '自动投料机1', type: 'feeder', status: 'running', gridX: 16, gridY: 22, efficiency: 92, temperature: 35 },
     { id: 'conveyor1', areaId: 'feeding', name: '输送带1', type: 'conveyor', status: 'running', gridX: 19, gridY: 22, efficiency: 95, temperature: 32 },
+    { id: 'camera1', areaId: 'feeding', name: '视觉检测相机1', type: 'camera', status: 'running', gridX: 17, gridY: 24, efficiency: 93, temperature: 38 },
     
     // 生产车间设备
     { id: 'reactor1', areaId: 'production', name: '反应釜1', type: 'reactor', status: 'running', gridX: 28, gridY: 22, efficiency: 88, temperature: 65 },
