@@ -34,7 +34,7 @@ const iconPath = computed(() => {
   if (mapper) {
     return mapper(props.deviceId)
   }
-  return '/src/assets/devices/box.svg' // 默认图标
+  return '/assets/devices/box.svg' // 默认图标
 })
 
 const handleError = () => {

@@ -13,7 +13,7 @@
     >
       <div xmlns="http://www.w3.org/1999/xhtml" class="box-icon-container">
         <img 
-          src="/src/assets/devices/box.svg" 
+          src="/assets/devices/box.svg" 
           class="box-svg-icon"
           alt="box"
         />

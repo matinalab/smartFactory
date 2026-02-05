@@ -572,7 +572,7 @@ const getModelPathByDeviceType = (deviceData) => {
   const nameWithoutExt = fileName.replace('.svg', '') // 移除.svg扩展名
   
   // 构建对应的模型路径
-  const modelPath = `/src/assets/model/${nameWithoutExt}.glb`
+  const modelPath = `/assets/model/${nameWithoutExt}.glb`
   
   console.log(`设备 ${deviceData.id}: 图片路径 ${iconPath} -> 模型路径 ${modelPath}`)
   

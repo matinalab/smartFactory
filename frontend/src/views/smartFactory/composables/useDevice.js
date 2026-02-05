@@ -90,38 +90,38 @@ export function useDevice() {
   const getDeviceIconPath = (type, deviceId = '') => {
     const iconMap = {
       robot: (id) => {
-        if (id === 'robot1') return '/src/assets/devices/robot1.svg'
-        if (id === 'robot2') return '/src/assets/devices/robot2.svg'
-        return '/src/assets/devices/robot1.svg'
+        if (id === 'robot1') return '/assets/devices/robot1.svg'
+        if (id === 'robot2') return '/assets/devices/robot2.svg'
+        return '/assets/devices/robot1.svg'
       },
       cnc: (id) => {
-        if (id === 'cnc1') return '/src/assets/devices/cnc1.svg'
-        if (id === 'cnc2') return '/src/assets/devices/cnc2.svg'
-        return '/src/assets/devices/cnc1.svg'
+        if (id === 'cnc1') return '/assets/devices/cnc1.svg'
+        if (id === 'cnc2') return '/assets/devices/cnc2.svg'
+        return '/assets/devices/cnc1.svg'
       },
-      conveyor: () => '/src/assets/devices/conveyor1.svg',
-      forklift: () => '/src/assets/devices/forklift1.svg',
-      shelf: () => '/src/assets/devices/shelf1.svg',
+      conveyor: () => '/assets/devices/conveyor1.svg',
+      forklift: () => '/assets/devices/forklift1.svg',
+      shelf: () => '/assets/devices/shelf1.svg',
       tester: (id) => {
-        if (id === 'tester2') return '/src/assets/devices/tester2.svg'
-        return '/src/assets/devices/tester1.svg'
+        if (id === 'tester2') return '/assets/devices/tester2.svg'
+        return '/assets/devices/tester1.svg'
       },
-      camera: () => '/src/assets/devices/camera1.svg',
+      camera: () => '/assets/devices/camera1.svg',
 
-      washer: () => '/src/assets/devices/washer1.svg',
-      reactor: () => '/src/assets/devices/reactor1.svg',
-      pump: () => '/src/assets/devices/pump1.svg',
-      mixer: () => '/src/assets/devices/mixer1.svg',
-      labeler: () => '/src/assets/devices/labeler1.svg',
-      filler: () => '/src/assets/devices/filler1.svg',
-      feeder: () => '/src/assets/devices/feeder1.svg',
-      dryer: () => '/src/assets/devices/dryer1.svg',
-      capper: () => '/src/assets/devices/capper1.svg',
-      tranCar: () => '/src/assets/devices/tranCar.svg'
+      washer: () => '/assets/devices/washer1.svg',
+      reactor: () => '/assets/devices/reactor1.svg',
+      pump: () => '/assets/devices/pump1.svg',
+      mixer: () => '/assets/devices/mixer1.svg',
+      labeler: () => '/assets/devices/labeler1.svg',
+      filler: () => '/assets/devices/filler1.svg',
+      feeder: () => '/assets/devices/feeder1.svg',
+      dryer: () => '/assets/devices/dryer1.svg',
+      capper: () => '/assets/devices/capper1.svg',
+      tranCar: () => '/assets/devices/tranCar.svg'
     }
     
     const mapper = iconMap[type]
-    return mapper ? mapper(deviceId) : '/src/assets/devices/box.svg'
+    return mapper ? mapper(deviceId) : '/assets/devices/box.svg'
   }
 
   // 备用
